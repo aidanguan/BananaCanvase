@@ -19,8 +19,8 @@ const App: React.FC = () => {
     return {
       provider: ModelProvider.GOOGLE,
       modelId: ModelId.NANO_BANANA,
-      apiKey: '',
-      baseUrl: ''
+      imageSize: '1K',
+      aspectRatio: '1:1'
     };
   });
 
@@ -34,12 +34,15 @@ const App: React.FC = () => {
 
   // Check if setup is needed
   useEffect(() => {
-    if (!settings.apiKey && !process.env.API_KEY) {
+    const hasGeminiKey = !!(import.meta as any).env.VITE_GEMINI_API_KEY;
+    const hasAIHubMixKey = !!(import.meta as any).env.VITE_AIHUBMIX_API_KEY;
+    
+    if (!hasGeminiKey && !hasAIHubMixKey) {
       setShowWelcome(true);
     } else {
-        setShowWelcome(false);
+      setShowWelcome(false);
     }
-  }, [settings.apiKey]);
+  }, [settings.provider]);
 
   const updateSettings = (newSettings: Partial<AppSettings>) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
@@ -47,18 +50,15 @@ const App: React.FC = () => {
 
   const handleAuthError = async () => {
     if (window.aistudio) {
-        try {
-            await window.aistudio.openSelectKey();
-            // If user selects a key, it should fix the issue.
-            // We can clear the local key to ensure it uses the injected one if applicable.
-            setSettings(prev => ({...prev, apiKey: ''}));
-        } catch (e) {
-            console.error(e);
-            setShowWelcome(true);
-        }
-    } else {
+      try {
+        await window.aistudio.openSelectKey();
+      } catch (e) {
+        console.error(e);
         setShowWelcome(true);
-        alert("Authentication failed. Please check your API Key in Settings.");
+      }
+    } else {
+      setShowWelcome(true);
+      alert("身份验证失败。请在 .env 文件中检查你的 API 密钥。");
     }
   };
 
@@ -73,21 +73,21 @@ const App: React.FC = () => {
                         <Wand2 className="w-12 h-12 text-banana-500" />
                         </div>
                     </div>
-                    <h1 className="text-3xl font-bold text-white mb-4">Welcome to Banana Canvas</h1>
+                    <h1 className="text-3xl font-bold text-white mb-4">欢迎使用 Banana Canvas</h1>
                     <p className="text-slate-400 mb-8 leading-relaxed">
-                        To start generating images, please configure your API settings. 
-                        Click the <strong>Config</strong> button in the top bar to enter your API Key.
+                        要开始生成图像，请在 <code className="bg-dark-bg px-2 py-1 rounded text-banana-400">.env</code> 文件中配置你的 API 设置。
+                        添加 <strong>VITE_GEMINI_API_KEY</strong> 或 <strong>VITE_AIHUBMIX_API_KEY</strong> 以开始使用。
                     </p>
                     {window.aistudio && (
                          <button 
                             onClick={handleAuthError}
                             className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-bold mb-6 transition-transform hover:scale-105 shadow-lg"
                          >
-                            Connect Google Account
+                            连接 Google 账户
                          </button>
                     )}
                     <div className="p-4 bg-banana-500/5 border border-banana-500/20 rounded-lg text-sm text-banana-200">
-                        Supports <strong>Google Gemini</strong> and <strong>AIHubMix</strong> providers.
+                        支持 <strong>Google Gemini</strong> 和 <strong>AIHubMix</strong> 服务商。
                     </div>
                 </div>
             </div>
@@ -110,7 +110,7 @@ const App: React.FC = () => {
           }`}
         >
           <ImageIcon className="w-4 h-4" />
-          Simple Generator
+          简易生成器
         </button>
         <button
           onClick={() => setActiveTab('moodboard')}
@@ -121,15 +121,15 @@ const App: React.FC = () => {
           }`}
         >
           <Layers className="w-4 h-4" />
-          Mood Board & Edit
+          画板与编辑
         </button>
       </div>
 
       <main className="relative flex-1 overflow-hidden h-full">
         {activeTab === 'simple' ? (
-          <SimpleGenerator settings={settings} onAuthError={handleAuthError} />
+          <SimpleGenerator settings={settings} onAuthError={handleAuthError} onUpdateSettings={updateSettings} />
         ) : (
-          <MoodBoard settings={settings} onAuthError={handleAuthError} />
+          <MoodBoard settings={settings} onAuthError={handleAuthError} onUpdateSettings={updateSettings} />
         )}
       </main>
     </div>

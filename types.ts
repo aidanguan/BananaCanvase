@@ -33,11 +33,14 @@ export interface DrawPath {
   prompt?: string;
 }
 
+export type ImageSize = '1K' | '2K' | '4K';
+export type AspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
+
 export interface AppSettings {
   provider: ModelProvider;
   modelId: ModelId;
-  apiKey: string;
-  baseUrl: string;
+  imageSize: ImageSize;
+  aspectRatio: AspectRatio;
 }
 
 export interface GeneratedImageResult {

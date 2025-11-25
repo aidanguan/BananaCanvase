@@ -12,15 +12,17 @@ import {
   MousePointer,
   Settings
 } from './ui/Icons';
-import { AppSettings, CanvasImage, DrawPath, Point } from '../types';
+import { AppSettings, CanvasImage, DrawPath, Point, ImageSize, AspectRatio } from '../types';
 import { generateImageContent } from '../services/geminiService';
+import { ASPECT_RATIOS, getAvailableImageSizes } from '../constants';
 
 interface MoodBoardProps {
   settings: AppSettings;
   onAuthError?: () => void;
+  onUpdateSettings?: (settings: Partial<AppSettings>) => void;
 }
 
-const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
+const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSettings }) => {
   // --- State ---
   const [images, setImages] = useState<CanvasImage[]>([]);
   const [paths, setPaths] = useState<DrawPath[]>([]);
@@ -50,6 +52,17 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
   const lastPoint = useRef<Point | null>(null);
   const isSpacePressed = useRef(false);
 
+  // 获取当前模型支持的分辨率选项
+  const availableImageSizes = getAvailableImageSizes(settings.modelId);
+
+  // 当模型变化时，检查当前分辨率是否支持，如果不支持则重置为 1K
+  useEffect(() => {
+    const isCurrentSizeSupported = availableImageSizes.some(size => size.id === settings.imageSize);
+    if (!isCurrentSizeSupported && onUpdateSettings) {
+      onUpdateSettings({ imageSize: '1K' });
+    }
+  }, [settings.modelId, settings.imageSize, availableImageSizes, onUpdateSettings]);
+
   // --- Constants ---
   const CANVAS_WIDTH = 2048;
   const CANVAS_HEIGHT = 2048;
@@ -58,11 +71,11 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
   
   const getColorName = (hex: string) => {
     switch(hex.toLowerCase()) {
-        case '#f59e0b': return 'Orange';
-        case '#ef4444': return 'Red';
-        case '#22c55e': return 'Green';
-        case '#3b82f6': return 'Blue';
-        case '#ffffff': return 'White';
+        case '#f59e0b': return '橙色';
+        case '#ef4444': return '红色';
+        case '#22c55e': return '绿色';
+        case '#3b82f6': return '蓝色';
+        case '#ffffff': return '白色';
         default: return `Color(${hex})`;
     }
   };
@@ -561,21 +574,21 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
                 <button 
                     onClick={() => setTool('move')} 
                     className={`p-2 rounded-md transition-colors ${tool === 'move' ? 'bg-banana-500 text-white' : 'text-slate-400 hover:text-white'}`}
-                    title="Move Images (V)"
+                    title="移动图像 (V)"
                 >
                     <Move className="w-5 h-5" />
                 </button>
                 <button 
                     onClick={() => setTool('pan')} 
                     className={`p-2 rounded-md transition-colors ${tool === 'pan' ? 'bg-banana-500 text-white' : 'text-slate-400 hover:text-white'}`}
-                    title="Pan View (Space+Drag)"
+                    title="平移视图 (Space+拖拽)"
                 >
                     <MousePointer className="w-5 h-5" />
                 </button>
                 <button 
                     onClick={() => setTool('draw')} 
                     className={`p-2 rounded-md transition-colors ${tool === 'draw' ? 'bg-banana-500 text-white' : 'text-slate-400 hover:text-white'}`}
-                    title="Mask Pen (P)"
+                    title="遮罩画笔 (P)"
                 >
                     <PenTool className="w-5 h-5" />
                 </button>
@@ -587,7 +600,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
                         type="range" min="5" max="100" value={brushSize} 
                         onChange={(e) => setBrushSize(parseInt(e.target.value))}
                         className="w-24 accent-banana-500"
-                        title="Brush Size" 
+                        title="画笔大小" 
                     />
                     <div className="flex gap-1">
                         {/* Colors are visual only for the user, mask is always white for AI */}
@@ -605,16 +618,16 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
 
             <div className="w-px h-8 bg-dark-border mx-1"></div>
 
-            <button onClick={() => fileInputRef.current?.click()} className="btn-icon" title="Upload Images">
+            <button onClick={() => fileInputRef.current?.click()} className="btn-icon" title="上传图像">
                 <ImageIcon className="w-5 h-5 text-slate-400 hover:text-white" />
             </button>
             <input type="file" multiple ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
             
-            <button onClick={handleDeleteSelected} disabled={!selectedId} className="btn-icon disabled:opacity-30" title="Delete Selected">
+            <button onClick={handleDeleteSelected} disabled={!selectedId} className="btn-icon disabled:opacity-30" title="删除所选">
                 <Trash2 className="w-5 h-5 text-red-400" />
             </button>
             
-            <button onClick={() => setPaths([])} className="btn-icon" title="Clear Annotations">
+            <button onClick={() => setPaths([])} className="btn-icon" title="清除标注">
                 <Eraser className="w-5 h-5 text-slate-400 hover:text-white" />
             </button>
         </div>
@@ -622,15 +635,46 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
         <div className="flex items-center gap-4">
              {/* Info Hint */}
             <div className="text-xs text-slate-500 hidden md:block">
-                {tool === 'draw' ? 'Draw over areas to edit' : 'Mouse Wheel to Zoom • Middle Click to Pan'}
+                {tool === 'draw' ? '在区域上绘制以编辑' : '鼠标滚轮缩放 • 中键平移'}
             </div>
+            
+            {/* 分辨率和宽高比 */}
+            <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-slate-400">分辨率</label>
+                <select
+                  className="bg-dark-bg border border-dark-border rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-banana-500 transition-colors"
+                  value={settings.imageSize}
+                  onChange={(e) => onUpdateSettings?.({ imageSize: e.target.value as ImageSize })}
+                  disabled={availableImageSizes.length === 1}
+                  title={availableImageSizes.length === 1 ? '当前模型仅支持 1K' : ''}
+                >
+                  {availableImageSizes.map((size) => (
+                    <option key={size.id} value={size.id}>{size.id}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-slate-400">宽高比</label>
+                <select
+                  className="bg-dark-bg border border-dark-border rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-banana-500 transition-colors"
+                  value={settings.aspectRatio}
+                  onChange={(e) => onUpdateSettings?.({ aspectRatio: e.target.value as AspectRatio })}
+                >
+                  {ASPECT_RATIOS.map((ratio) => (
+                    <option key={ratio.id} value={ratio.id}>{ratio.id}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
             <button 
                 onClick={handleGenerate}
                 disabled={isGenerating}
                 className="bg-banana-500 hover:bg-banana-600 text-white px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-banana-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
                 {isGenerating ? <RefreshCw className="animate-spin w-4 h-4"/> : <Wand2 className="w-4 h-4" />}
-                Generate
+                生成
             </button>
         </div>
       </div>
@@ -690,7 +734,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
                                     <textarea 
                                         value={path.prompt || ''}
                                         onChange={(e) => updatePathPrompt(path.id, e.target.value)}
-                                        placeholder="Describe edit..."
+                                        placeholder="描述编辑..."
                                         className="w-full bg-transparent text-xs text-white placeholder-slate-500 outline-none resize-none h-16 pointer-events-auto"
                                         onPointerDown={(e) => e.stopPropagation()} 
                                     />
@@ -705,7 +749,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
             {images.length === 0 && paths.length === 0 && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-30 select-none">
                     <ImageIcon className="w-16 h-16 text-slate-500 mb-4" />
-                    <p className="text-slate-400">Drag & Drop Images</p>
+                    <p className="text-slate-400">拖放图像</p>
                 </div>
             )}
             
@@ -720,15 +764,15 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
             <div className="p-4 font-bold text-slate-300 border-b border-dark-border flex items-center justify-between">
                 <span className="flex items-center gap-2">
                     <RefreshCw className="w-4 h-4 text-banana-400" />
-                    Generated Results
+                    生成结果
                 </span>
-                <span className="text-xs font-normal text-slate-500">{generatedImages.length} items</span>
+                <span className="text-xs font-normal text-slate-500">{generatedImages.length} 个项目</span>
             </div>
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
                 {generatedImages.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-40 text-slate-500 text-sm text-center opacity-50">
                         <Wand2 className="w-8 h-8 mb-2" />
-                        <p>Annotate your board<br/>and click Generate</p>
+                        <p>标注你的画板<br/>然后点击生成</p>
                     </div>
                 )}
                 {generatedImages.map((src, idx) => (
@@ -739,14 +783,14 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
                                 <button 
                                     onClick={() => addGeneratedToBoard(src)}
                                     className="bg-banana-500 p-2 rounded-full text-white hover:bg-banana-400 hover:scale-110 transition-all shadow-lg"
-                                    title="Add back to Canvas"
+                                    title="添加到画布"
                                 >
                                     <Plus className="w-5 h-5" />
                                 </button>
                                 <button 
                                     onClick={() => handleDownload(src)}
                                     className="bg-blue-600 p-2 rounded-full text-white hover:bg-blue-500 hover:scale-110 transition-all shadow-lg"
-                                    title="Download Image"
+                                    title="下载图像"
                                 >
                                     <Download className="w-5 h-5" />
                                 </button>
@@ -755,7 +799,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
                                 onClick={() => setGeneratedImages(prev => prev.filter((_, i) => i !== idx))}
                                 className="text-red-400 hover:text-red-300 text-xs flex items-center gap-1 mt-2 hover:underline"
                             >
-                                <Trash2 className="w-3 h-3" /> Remove
+                                <Trash2 className="w-3 h-3" /> 移除
                             </button>
                         </div>
                     </div>
