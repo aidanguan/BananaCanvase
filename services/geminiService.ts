@@ -5,42 +5,37 @@ import { AppSettings, ModelId } from "../types";
 export const generateImageContent = async (
   prompt: string,
   settings: AppSettings,
-  imageBase64?: string
+  imageInput?: string | string[]
 ): Promise<string> => {
   
-  const apiKey = settings.apiKey || process.env.API_KEY;
+  // Follows guidelines: API key from process.env.API_KEY or settings fallback
+  const apiKey = process.env.API_KEY || settings.apiKey;
 
   if (!apiKey) {
     throw new Error("API Key is missing. Please configure it in settings.");
   }
 
-  // Configure the client. 
-  // Note: We cast to any to support baseUrl injection if the specific SDK version supports it 
-  // or if we are using a compatible proxy pattern.
-  const clientConfig: any = { apiKey };
-  if (settings.baseUrl) {
-    // Some SDK versions look for rootUrl, baseUrl, or transport options. 
-    // We attempt to set commonly used properties for proxying.
-    clientConfig.baseUrl = settings.baseUrl; 
-    clientConfig.rootUrl = settings.baseUrl;
-  }
-
-  const ai = new GoogleGenAI(clientConfig);
+  // Configure the client using named parameters as required by the SDK guidelines
+  const ai = new GoogleGenAI({ apiKey });
   const actualModelName = MODEL_MAPPING[settings.modelId];
 
   try {
     const parts: any[] = [];
     
-    // Add image first if it exists
-    if (imageBase64) {
-      // Remove data URL prefix if present for clean base64
-      const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
+    // Handle image input (single string or array of strings)
+    if (imageInput) {
+      const images = Array.isArray(imageInput) ? imageInput : [imageInput];
       
-      parts.push({
-        inlineData: {
-          data: cleanBase64,
-          mimeType: 'image/png' // Assuming PNG for canvas exports/uploads
-        }
+      images.forEach(img => {
+        // Remove data URL prefix if present for clean base64
+        const cleanBase64 = img.split(',')[1] || img;
+        
+        parts.push({
+          inlineData: {
+            data: cleanBase64,
+            mimeType: 'image/png'
+          }
+        });
       });
     }
 
@@ -69,6 +64,8 @@ export const generateImageContent = async (
       
       // Fallback if no inline image found but maybe a text description of failure
       if (contentParts[0].text) {
+         // Some models might return text explaining why it failed or refused
+         // If the user asked for JSON, we might parse it, but here we expect image.
          throw new Error(`Model returned text instead of image: ${contentParts[0].text}`);
       }
     }

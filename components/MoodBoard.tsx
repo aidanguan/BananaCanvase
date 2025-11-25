@@ -31,7 +31,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
   
   // Brush Settings
   const [brushColor, setBrushColor] = useState('#f59e0b');
-  const [brushSize, setBrushSize] = useState(4);
+  const [brushSize, setBrushSize] = useState(20); // Larger default for mask painting
   
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -56,6 +56,17 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
 
   // --- Helpers ---
   
+  const getColorName = (hex: string) => {
+    switch(hex.toLowerCase()) {
+        case '#f59e0b': return 'Orange';
+        case '#ef4444': return 'Red';
+        case '#22c55e': return 'Green';
+        case '#3b82f6': return 'Blue';
+        case '#ffffff': return 'White';
+        default: return `Color(${hex})`;
+    }
+  };
+
   // Convert screen coordinates to canvas coordinates
   const getCanvasPos = (clientX: number, clientY: number): Point => {
     if (!containerRef.current || !canvasRef.current) return { x: 0, y: 0, pressure: 0.5 };
@@ -130,9 +141,10 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
       
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
+      // Render with 50% opacity to let user see what's underneath while drawing mask
+      ctx.globalAlpha = 0.6; 
       ctx.strokeStyle = path.color;
 
-      // Render segments
       for (let i = 1; i < path.points.length; i++) {
         const p1 = path.points[i - 1];
         const p2 = path.points[i];
@@ -146,6 +158,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
         
         ctx.stroke();
       }
+      ctx.globalAlpha = 1.0;
     });
   }, [images, paths, selectedId]);
 
@@ -286,7 +299,6 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
             const mouseY = e.clientY - rect.top;
             
             // Calculate how much the viewport position needs to change to keep mouse fixed
-            // x' = mouseX - (mouseX - x) * (newScale / oldScale)
             const newX = mouseX - (mouseX - viewport.x) * (newScale / viewport.scale);
             const newY = mouseY - (mouseY - viewport.y) * (newScale / viewport.scale);
             
@@ -297,7 +309,9 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      Array.from(e.target.files).forEach((file, index) => {
+      const files = e.target.files;
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index];
         const reader = new FileReader();
         reader.onload = (ev) => {
           const src = ev.target?.result as string;
@@ -326,7 +340,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
           }
         };
         reader.readAsDataURL(file);
-      });
+      }
     }
   };
 
@@ -343,14 +357,10 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
 
   // --- Generation Logic ---
 
-  // 1. Calculate the bounding box of all visual elements (images + paths)
   const getContentBounds = () => {
     if (images.length === 0 && paths.length === 0) return null;
 
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
     images.forEach(img => {
       minX = Math.min(minX, img.x);
@@ -378,12 +388,12 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
     };
   };
 
-  // 2. Generate a clean, cropped base64 image of the content on a white background
-  const getCanvasContentAsBase64 = async (): Promise<string> => {
+  // Improved helper: now supports specific render modes
+  const getCanvasContentAsBase64 = async (options: { mode: 'source' | 'mask' }): Promise<string> => {
     const bounds = getContentBounds();
-    if (!bounds) throw new Error("Canvas is empty. Add images or drawings first.");
+    if (!bounds) throw new Error("Canvas is empty.");
 
-    const margin = 20; // Breathing room
+    const margin = 20;
     const x = bounds.x - margin;
     const y = bounds.y - margin;
     const w = bounds.width + (margin * 2);
@@ -395,81 +405,112 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
     const ctx = tempCanvas.getContext('2d');
     if (!ctx) throw new Error("Failed to create image context");
 
-    // Use White background for the AI input instead of dark UI theme
-    ctx.fillStyle = '#ffffff';
+    // SETUP BACKGROUND
+    if (options.mode === 'mask') {
+        // Mask Mode: Black Background
+        ctx.fillStyle = '#000000';
+    } else {
+        // Source Mode: White Background (neutral for AI)
+        ctx.fillStyle = '#ffffff';
+    }
     ctx.fillRect(0, 0, w, h);
 
-    // Shift context to capture the bounds relative to (0,0)
+    // Shift context
     ctx.translate(-x, -y);
 
-    // Draw Images
-    const imagePromises = images.map(img => {
-      return new Promise<void>((resolve) => {
-        const imageEl = new Image();
-        // Since src is usually base64/blob from memory, this loads fast
-        imageEl.onload = () => {
-          ctx.save();
-          ctx.translate(img.x + img.width / 2, img.y + img.height / 2);
-          ctx.rotate(img.rotation * Math.PI / 180);
-          ctx.drawImage(imageEl, -img.width / 2, -img.height / 2, img.width, img.height);
-          ctx.restore();
-          resolve();
-        };
-        imageEl.onerror = () => resolve(); 
-        imageEl.src = img.src;
-      });
-    });
-    
-    await Promise.all(imagePromises);
+    // 1. RENDER IMAGES (Only for Source Mode)
+    if (options.mode === 'source') {
+        const imagePromises = images.map(img => {
+          return new Promise<void>((resolve) => {
+            const imageEl = new Image();
+            imageEl.onload = () => {
+              ctx.save();
+              ctx.translate(img.x + img.width / 2, img.y + img.height / 2);
+              ctx.rotate(img.rotation * Math.PI / 180);
+              ctx.drawImage(imageEl, -img.width / 2, -img.height / 2, img.width, img.height);
+              ctx.restore();
+              resolve();
+            };
+            imageEl.onerror = () => resolve(); 
+            imageEl.src = img.src;
+          });
+        });
+        await Promise.all(imagePromises);
+    }
 
-    // Draw Paths
-    paths.forEach(path => {
-      if (path.points.length < 2) return;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = path.color;
+    // 2. RENDER PATHS (Only for Mask Mode)
+    if (options.mode === 'mask') {
+        paths.forEach(path => {
+          if (path.points.length < 2) return;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          
+          // Mask Mode: White strokes
+          ctx.strokeStyle = '#ffffff';
 
-      for (let i = 1; i < path.points.length; i++) {
-        const p1 = path.points[i - 1];
-        const p2 = path.points[i];
-        
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        
-        // Replicate pressure sensitivity visual
-        const pressure = p2.pressure > 0 ? p2.pressure : 0.5;
-        ctx.lineWidth = path.width * (0.5 + pressure); 
-        ctx.stroke();
-      }
-    });
+          for (let i = 1; i < path.points.length; i++) {
+            const p1 = path.points[i - 1];
+            const p2 = path.points[i];
+            
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            
+            const pressure = p2.pressure > 0 ? p2.pressure : 0.5;
+            // Draw slightly thicker in mask mode to ensure coverage
+            ctx.lineWidth = Math.max(path.width * (0.5 + pressure), 5); 
+            ctx.stroke();
+          }
+        });
+    }
 
     return tempCanvas.toDataURL('image/png');
   };
 
   const handleGenerate = async () => {
-    // Construct global prompt from annotations
+    // Collect comments from paths
     const activePaths = paths.filter(p => p.prompt && p.prompt.trim().length > 0);
+    const hasAnnotations = paths.length > 0;
+
+    let finalPrompt = "You are an expert image editor. ";
     
-    // Default prompt if nothing specific
-    let finalPrompt = "Generate a high quality image based on this composition.";
-    
-    if (activePaths.length > 0) {
-        finalPrompt += " Please apply the following changes based on the annotated areas:\n";
-        activePaths.forEach((p, idx) => {
-             finalPrompt += `${idx + 1}. [Annotation Color: ${p.color}]: ${p.prompt}\n`;
-        });
+    if (hasAnnotations) {
+        finalPrompt += "I have provided two images:\n";
+        finalPrompt += "1. A Source Image containing the scene to edit.\n";
+        finalPrompt += "2. A B&W Mask Image (Black background, White strokes) indicating EXACTLY where to apply changes.\n\n";
+        finalPrompt += "TASK: Apply the following edits ONLY to the white masked areas on the Source Image. Keep the rest of the image unchanged.\n\n";
+        
+        finalPrompt += "EDIT INSTRUCTIONS:\n";
+        if (activePaths.length > 0) {
+            activePaths.forEach((p, idx) => {
+                const colorName = getColorName(p.color);
+                finalPrompt += `- Area ${idx + 1} (${colorName} on canvas): ${p.prompt}\n`;
+            });
+        } else {
+            finalPrompt += "- Update the content in the masked area to fit the surrounding scene naturally.\n";
+        }
+        finalPrompt += "\nOutput ONLY the final edited image. Do NOT show the mask or the colored lines.";
     } else {
-        finalPrompt += " Enhance and refine the composition while maintaining the current layout.";
+        finalPrompt += "The attached image is a composition layout. Refine it into a realistic, cohesive high-quality image. Blend the edges of the reference photos naturally.";
     }
 
     setIsGenerating(true);
     try {
-      // Use the smart cropped canvas instead of the full viewport
-      const canvasBase64 = await getCanvasContentAsBase64();
+      // 1. Get Clean Source (No drawings)
+      const sourceImageBase64 = await getCanvasContentAsBase64({ mode: 'source' });
       
-      const resultBase64 = await generateImageContent(finalPrompt, settings, canvasBase64);
+      const inputs = [sourceImageBase64];
+
+      // 2. Get Mask (Drawings only, white on black)
+      if (hasAnnotations) {
+          const maskImageBase64 = await getCanvasContentAsBase64({ mode: 'mask' });
+          inputs.push(maskImageBase64);
+      }
+
+      // 3. Send both to AI
+      const resultBase64 = await generateImageContent(finalPrompt, settings, inputs);
       setGeneratedImages(prev => [resultBase64, ...prev]);
+
     } catch (e: any) {
       console.error(e);
       const msg = e.message || '';
@@ -486,16 +527,15 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
     const img = new Image();
     img.src = src;
     img.onload = () => {
-        // Place in center of current view
         const centerX = (-viewport.x + containerRef.current!.offsetWidth/2) / viewport.scale;
         const centerY = (-viewport.y + containerRef.current!.offsetHeight/2) / viewport.scale;
         
         const newImg: CanvasImage = {
             id: Date.now().toString(),
             src,
-            x: centerX - img.width/2, // Rough estimate, actual width unknown until load but good enough
+            x: centerX - img.width/2, 
             y: centerY - img.height/2,
-            width: 400, // Fixed initial size for generated
+            width: 400,
             height: 400 * (img.height/img.width),
             rotation: 0
         };
@@ -535,7 +575,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
                 <button 
                     onClick={() => setTool('draw')} 
                     className={`p-2 rounded-md transition-colors ${tool === 'draw' ? 'bg-banana-500 text-white' : 'text-slate-400 hover:text-white'}`}
-                    title="Annotation Pen (P)"
+                    title="Mask Pen (P)"
                 >
                     <PenTool className="w-5 h-5" />
                 </button>
@@ -544,12 +584,13 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
             {tool === 'draw' && (
                 <div className="flex items-center gap-3 px-3 border-l border-dark-border animate-in fade-in">
                     <input 
-                        type="range" min="1" max="20" value={brushSize} 
+                        type="range" min="5" max="100" value={brushSize} 
                         onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                        className="w-20 accent-banana-500"
+                        className="w-24 accent-banana-500"
                         title="Brush Size" 
                     />
                     <div className="flex gap-1">
+                        {/* Colors are visual only for the user, mask is always white for AI */}
                         {['#f59e0b', '#ef4444', '#22c55e', '#3b82f6', '#ffffff'].map(c => (
                             <button
                                 key={c}
@@ -579,8 +620,9 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
         </div>
         
         <div className="flex items-center gap-4">
+             {/* Info Hint */}
             <div className="text-xs text-slate-500 hidden md:block">
-                Mouse Wheel to Zoom • Middle Click to Pan
+                {tool === 'draw' ? 'Draw over areas to edit' : 'Mouse Wheel to Zoom • Middle Click to Pan'}
             </div>
             <button 
                 onClick={handleGenerate}
@@ -632,7 +674,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
                                 position: 'absolute',
                                 left: center.x,
                                 top: center.y,
-                                transform: 'translate(-50%, -50%)' // Center the bubble on the point
+                                transform: 'translate(-50%, -50%)' 
                             }}
                             className="group z-10"
                         >
@@ -648,9 +690,9 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError }) => {
                                     <textarea 
                                         value={path.prompt || ''}
                                         onChange={(e) => updatePathPrompt(path.id, e.target.value)}
-                                        placeholder="Add comment..."
+                                        placeholder="Describe edit..."
                                         className="w-full bg-transparent text-xs text-white placeholder-slate-500 outline-none resize-none h-16 pointer-events-auto"
-                                        onPointerDown={(e) => e.stopPropagation()} // Allow text selection without dragging canvas
+                                        onPointerDown={(e) => e.stopPropagation()} 
                                     />
                                 </div>
                             </div>
