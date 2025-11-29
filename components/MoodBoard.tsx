@@ -668,6 +668,15 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
               </div>
             </div>
             
+            {/* 提示：Google provider 不支持宽高比和分辨率 */}
+            {settings.provider === 'Google' && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2">
+                <p className="text-xs text-blue-200">
+                  ⚠️ 当前使用 Google 官方 API，不支持自定义分辨率和宽高比参数。请在配置中切换到 <strong>AIHubMix</strong> 服务商以使用这些功能。
+                </p>
+              </div>
+            )}
+            
             <button 
                 onClick={handleGenerate}
                 disabled={isGenerating}

@@ -48,6 +48,14 @@ export interface GeneratedImageResult {
   prompt: string;
 }
 
+export interface ReferenceImage {
+  id: string;              // 唯一标识,使用时间戳
+  src: string;             // Base64编码的图片数据(含data:image/...前缀)
+  comment: string;         // 用户为该图片填写的参考意见
+  isSelected: boolean;     // 是否参与本次融合生成
+  uploadTime: number;      // 上传时间戳,毫秒级
+}
+
 declare global {
   interface AIStudio {
     openSelectKey: () => Promise<void>;

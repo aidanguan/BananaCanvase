@@ -41,3 +41,14 @@ export const MODEL_MAPPING: Record<ModelId, string> = {
   [ModelId.NANO_BANANA]: 'gemini-2.5-flash-image',
   [ModelId.NANO_BANANA_PRO]: 'gemini-3-pro-image-preview',
 };
+
+// 每个模型支持的最大参考图片数
+export const MODEL_IMAGE_LIMITS: Record<ModelId, number> = {
+  [ModelId.NANO_BANANA]: 5,
+  [ModelId.NANO_BANANA_PRO]: 10,
+};
+
+// 根据模型获取最大图片数量
+export const getMaxImageCount = (modelId: ModelId): number => {
+  return MODEL_IMAGE_LIMITS[modelId] || 5;
+};
