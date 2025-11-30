@@ -197,9 +197,9 @@ const SimpleGenerator: React.FC<SimpleGeneratorProps> = ({ settings, onAuthError
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 p-6 max-w-7xl mx-auto h-full">
+    <div className="flex gap-4 p-6 max-w-[1920px] mx-auto h-full">
       {/* Input Section */}
-      <div className="flex-1 flex flex-col gap-4 bg-dark-surface p-6 rounded-xl border border-dark-border overflow-y-auto min-h-0">
+      <div className="w-80 flex flex-col gap-4 bg-dark-surface p-6 rounded-xl border border-dark-border overflow-y-auto min-h-0">
         <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
           <Wand2 className="w-5 h-5 text-banana-400" />
           创建新图
@@ -380,7 +380,7 @@ const SimpleGenerator: React.FC<SimpleGeneratorProps> = ({ settings, onAuthError
         )}
       </div>
 
-      {/* Output Section */}
+      {/* Output Section - Flexible */}
       <div className="flex-1 bg-black rounded-xl border border-dark-border flex items-center justify-center relative overflow-hidden min-h-[400px]">
         {generatedImage ? (
           <img src={generatedImage} alt="Generated" className="max-w-full max-h-full object-contain shadow-2xl" />
