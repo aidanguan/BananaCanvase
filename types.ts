@@ -17,6 +17,7 @@ export interface CanvasImage {
   width: number;
   height: number;
   rotation: number;
+  visible?: boolean;
 }
 
 export interface Point {

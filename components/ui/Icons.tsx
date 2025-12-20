@@ -11,7 +11,11 @@ import {
   Eraser,
   PenTool,
   MousePointer,
-  Move
+  Move,
+  Eye,
+  EyeOff,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 export { 
@@ -22,9 +26,13 @@ export {
   Trash2, 
   RefreshCw, 
   Plus, 
-  Wand2,
-  Eraser,
-  PenTool,
-  MousePointer,
-  Move
+  Wand2, 
+  Eraser, 
+  PenTool, 
+  MousePointer, 
+  Move, 
+  Eye, 
+  EyeOff,
+  ChevronLeft,
+  ChevronRight
 };

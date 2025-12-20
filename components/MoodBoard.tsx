@@ -10,7 +10,12 @@ import {
   Download,
   Eraser,
   MousePointer,
-  Settings
+  Settings,
+  Layers,
+  Eye,
+  EyeOff,
+  ChevronLeft,
+  ChevronRight
 } from './ui/Icons';
 import { AppSettings, CanvasImage, DrawPath, Point, ImageSize, AspectRatio } from '../types';
 import { generateImageContent } from '../services/geminiService';
@@ -38,6 +43,10 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  
+  // Sidebar State
+  const [showLayers, setShowLayers] = useState(true);
+  const [showGenerated, setShowGenerated] = useState(true);
   
   // Canvas Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,6 +136,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
 
     // 1. Draw Images
     images.forEach(img => {
+      if (img.visible === false) return;
       const imageEl = new Image();
       imageEl.src = img.src;
       
@@ -357,6 +367,22 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
     }
   };
 
+  const handleNewCanvas = () => {
+    if (window.confirm('确定要新建画布吗？未保存的内容将丢失。')) {
+      setImages([]);
+      setPaths([]);
+      setGeneratedImages([]);
+      setViewport({ x: 0, y: 0, scale: 1 });
+    }
+  };
+
+  const handleToggleVisibility = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setImages(prev => prev.map(img => 
+      img.id === id ? { ...img, visible: img.visible === undefined ? false : !img.visible } : img
+    ));
+  };
+
   const handleDeleteSelected = () => {
     if (selectedId) {
       setImages(prev => prev.filter(img => img.id !== selectedId));
@@ -568,7 +594,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
   return (
     <div className="flex flex-col h-full overflow-hidden bg-dark-bg">
       {/* Toolbar */}
-      <div className="bg-dark-surface p-2 border-b border-dark-border flex items-center justify-between z-20 shadow-md">
+      <div className="bg-dark-surface p-2 border-b border-dark-border flex items-center justify-between z-20 shadow-md shrink-0">
         <div className="flex items-center gap-2">
             <div className="flex bg-dark-bg rounded-lg border border-dark-border p-1">
                 <button 
@@ -633,10 +659,7 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
         </div>
         
         <div className="flex items-center gap-4">
-             {/* Info Hint */}
-            <div className="text-xs text-slate-500 hidden md:block">
-                {tool === 'draw' ? '在区域上绘制以编辑' : '鼠标滚轮缩放 • 中键平移'}
-            </div>
+             {/* Info Hint - Removed */}
             
             {/* 分辨率和宽高比 */}
             <div className="flex items-center gap-2">
@@ -689,6 +712,70 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
       </div>
 
       <div className="flex flex-1 overflow-hidden relative">
+        {/* Left Sidebar (Layers) - Moved to left */}
+        {showLayers && (
+            <div className="w-60 bg-dark-surface border-r border-dark-border flex flex-col shrink-0" style={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
+                <div className="p-3 border-b border-dark-border flex items-center justify-between w-full">
+                    <span className="font-bold text-slate-300 flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-banana-400" />
+                        图层
+                    </span>
+                    <div className="flex items-center gap-1">
+                        <button 
+                            onClick={handleNewCanvas}
+                            className="p-1 text-slate-400 hover:text-white hover:bg-dark-bg rounded transition-colors"
+                            title="新建画布"
+                        >
+                            <Plus className="w-4 h-4" />
+                        </button>
+                        <div className="w-px h-3 bg-dark-border mx-1"></div>
+                        <span className="text-xs text-slate-500 mr-1">{images.length}</span>
+                        <button 
+                            onClick={() => setShowLayers(false)}
+                            className="text-slate-500 hover:text-white p-1 hover:bg-dark-bg rounded transition-colors"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Info Hint - Removed */}
+                
+                <div className="flex-1 overflow-y-auto p-2 space-y-1 w-full">
+                    {images.length === 0 && (
+                        <div className="text-center py-8 text-slate-500 text-xs">
+                            暂无图层
+                        </div>
+                    )}
+                    {[...images].reverse().map((img) => (
+                    <div 
+                        key={img.id}
+                        onClick={() => setSelectedId(img.id)}
+                        className={`p-2 rounded-lg cursor-pointer transition-all border flex items-center gap-2 ${
+                            selectedId === img.id 
+                            ? 'bg-banana-500/20 border-banana-500/50' 
+                            : 'bg-dark-bg/30 border-transparent hover:bg-dark-bg/50'
+                        }`}
+                    >
+                        <button 
+                            onClick={(e) => handleToggleVisibility(img.id, e)}
+                            className="p-1 rounded hover:bg-dark-bg/50 text-slate-400 hover:text-white"
+                            title={img.visible === false ? "显示" : "隐藏"}
+                        >
+                            {img.visible === false ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                        <div className="w-8 h-8 rounded overflow-hidden bg-dark-bg shrink-0">
+                            <img src={img.src} className="w-full h-full object-cover" alt="" />
+                        </div>
+                        <div className="text-xs text-slate-300 truncate flex-1">
+                            图层 {img.id.slice(-4)}
+                        </div>
+                    </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
         {/* Infinite Canvas Container */}
         <div 
             ref={containerRef}
@@ -699,6 +786,26 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
             onPointerLeave={handlePointerUp}
             onWheel={handleWheel}
         >
+             {/* Floating Toggle Buttons */}
+             {!showLayers && (
+                <button 
+                    onClick={() => setShowLayers(true)}
+                    className="absolute left-4 top-4 z-50 p-2 bg-dark-surface border border-dark-border rounded-lg shadow-lg text-slate-400 hover:text-white hover:border-banana-500 transition-all"
+                    title="显示图层"
+                >
+                    <Layers className="w-5 h-5" />
+                </button>
+             )}
+             {!showGenerated && (
+                <button 
+                    onClick={() => setShowGenerated(true)}
+                    className="absolute right-4 top-4 z-50 p-2 bg-dark-surface border border-dark-border rounded-lg shadow-lg text-slate-400 hover:text-white hover:border-banana-500 transition-all"
+                    title="显示生成结果"
+                >
+                    <RefreshCw className="w-5 h-5" />
+                </button>
+             )}
+
              {/* Transformed Content Layer */}
             <div 
                 style={{ 
@@ -768,53 +875,63 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
             </div>
         </div>
 
-        {/* Generated Sidebar */}
-        <div className="w-80 bg-dark-surface border-l border-dark-border flex flex-col z-20 shadow-xl">
-            <div className="p-4 font-bold text-slate-300 border-b border-dark-border flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                    <RefreshCw className="w-4 h-4 text-banana-400" />
-                    生成结果
-                </span>
-                <span className="text-xs font-normal text-slate-500">{generatedImages.length} 个项目</span>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
-                {generatedImages.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-40 text-slate-500 text-sm text-center opacity-50">
-                        <Wand2 className="w-8 h-8 mb-2" />
-                        <p>标注你的画板<br/>然后点击生成</p>
+        {/* Generated Sidebar (Right) */}
+        {showGenerated && (
+            <div className="w-60 bg-dark-surface border-l border-dark-border flex flex-col z-20 shadow-xl shrink-0">
+                <div className="p-4 font-bold text-slate-300 border-b border-dark-border flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                        <RefreshCw className="w-4 h-4 text-banana-400" />
+                        生成结果
+                    </span>
+                    <div className="flex items-center gap-2">
+                         <span className="text-xs font-normal text-slate-500">{generatedImages.length}</span>
+                         <button 
+                            onClick={() => setShowGenerated(false)}
+                            className="text-slate-500 hover:text-white p-1 hover:bg-dark-bg rounded transition-colors"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
                     </div>
-                )}
-                {generatedImages.map((src, idx) => (
-                    <div key={idx} className="group relative rounded-xl overflow-hidden border border-dark-border bg-black shadow-lg">
-                        <img src={src} alt={`Result ${idx}`} className="w-full h-auto" />
-                        <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
-                            <div className="flex gap-2">
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
+                    {generatedImages.length === 0 && (
+                        <div className="flex flex-col items-center justify-center h-40 text-slate-500 text-sm text-center opacity-50">
+                            <Wand2 className="w-8 h-8 mb-2" />
+                            <p>标注你的画板<br/>然后点击生成</p>
+                        </div>
+                    )}
+                    {generatedImages.map((src, idx) => (
+                        <div key={idx} className="group relative rounded-xl overflow-hidden border border-dark-border bg-black shadow-lg">
+                            <img src={src} alt={`Result ${idx}`} className="w-full h-auto" />
+                            <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => addGeneratedToBoard(src)}
+                                        className="bg-banana-500 p-2 rounded-full text-white hover:bg-banana-400 hover:scale-110 transition-all shadow-lg"
+                                        title="添加到画布"
+                                    >
+                                        <Plus className="w-5 h-5" />
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDownload(src)}
+                                        className="bg-blue-600 p-2 rounded-full text-white hover:bg-blue-500 hover:scale-110 transition-all shadow-lg"
+                                        title="下载图像"
+                                    >
+                                        <Download className="w-5 h-5" />
+                                    </button>
+                                </div>
                                 <button 
-                                    onClick={() => addGeneratedToBoard(src)}
-                                    className="bg-banana-500 p-2 rounded-full text-white hover:bg-banana-400 hover:scale-110 transition-all shadow-lg"
-                                    title="添加到画布"
+                                    onClick={() => setGeneratedImages(prev => prev.filter((_, i) => i !== idx))}
+                                    className="text-red-400 hover:text-red-300 text-xs flex items-center gap-1 mt-2 hover:underline"
                                 >
-                                    <Plus className="w-5 h-5" />
-                                </button>
-                                <button 
-                                    onClick={() => handleDownload(src)}
-                                    className="bg-blue-600 p-2 rounded-full text-white hover:bg-blue-500 hover:scale-110 transition-all shadow-lg"
-                                    title="下载图像"
-                                >
-                                    <Download className="w-5 h-5" />
+                                    <Trash2 className="w-3 h-3" /> 移除
                                 </button>
                             </div>
-                            <button 
-                                onClick={() => setGeneratedImages(prev => prev.filter((_, i) => i !== idx))}
-                                className="text-red-400 hover:text-red-300 text-xs flex items-center gap-1 mt-2 hover:underline"
-                            >
-                                <Trash2 className="w-3 h-3" /> 移除
-                            </button>
                         </div>
-                    </div>
-                ))}
+                    ))}
+                </div>
             </div>
-        </div>
+        )}
       </div>
     </div>
   );
