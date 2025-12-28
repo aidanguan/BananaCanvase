@@ -15,10 +15,11 @@ import {
   Eye,
   EyeOff,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Sparkles
 } from './ui/Icons';
 import { AppSettings, CanvasImage, DrawPath, Point, ImageSize, AspectRatio } from '../types';
-import { generateImageContent } from '../services/geminiService';
+import { generateImageContent, enhancePrompt } from '../services/geminiService';
 import { ASPECT_RATIOS, getAvailableImageSizes } from '../constants';
 
 interface MoodBoardProps {
@@ -43,6 +44,8 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [userPrompt, setUserPrompt] = useState<string>('');
+  const [isEnhancing, setIsEnhancing] = useState(false);
   
   // Sidebar State
   const [showLayers, setShowLayers] = useState(true);
@@ -350,11 +353,16 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
                   h = h * ratio;
               }
               const offset = index * 40;
+              
+              // 计算当前视口中心在画布上的位置
+              const viewportCenterX = containerRef.current ? (-viewport.x + containerRef.current.offsetWidth/2) / viewport.scale : CANVAS_WIDTH / 2;
+              const viewportCenterY = containerRef.current ? (-viewport.y + containerRef.current.offsetHeight/2) / viewport.scale : CANVAS_HEIGHT / 2;
+              
               const newImg: CanvasImage = {
                 id: Date.now().toString() + Math.random(),
                 src,
-                x: (CANVAS_WIDTH / 2 - w/2) + offset,
-                y: (CANVAS_HEIGHT / 2 - h/2) + offset,
+                x: viewportCenterX - w/2 + offset,
+                y: viewportCenterY - h/2 + offset,
                 width: w,
                 height: h,
                 rotation: 0
@@ -507,12 +515,60 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
   };
 
   const handleGenerate = async () => {
+    // 检查是否有内容可以生成
+    const hasImages = images.length > 0;
+    const hasUserPrompt = userPrompt && userPrompt.trim().length > 0;
+    const hasPaths = paths.length > 0;
+    
+    // 如果没有任何内容，提示用户
+    if (!hasImages && !hasUserPrompt && !hasPaths) {
+      alert('请上传图片或输入调整意见后再生成');
+      return;
+    }
+    
     // Collect comments from paths
     const activePaths = paths.filter(p => p.prompt && p.prompt.trim().length > 0);
     const hasAnnotations = paths.length > 0;
 
     let finalPrompt = "You are an expert image editor. ";
     
+    // 添加用户输入的调整意见
+    if (hasUserPrompt) {
+      finalPrompt += `
+
+USER REQUEST: ${userPrompt.trim()}
+
+`;
+    }
+    
+    // 如果没有图片，只有文字描述，则直接生成图片
+    if (!hasImages) {
+      if (!hasUserPrompt) {
+        alert('请输入调整意见或上传图片');
+        return;
+      }
+      
+      // 纯文本生成模式
+      finalPrompt = `Create a high-quality image based on the following description: ${userPrompt.trim()}`;
+      
+      setIsGenerating(true);
+      try {
+        const resultBase64 = await generateImageContent(finalPrompt, settings, []);
+        setGeneratedImages(prev => [resultBase64, ...prev]);
+      } catch (e: any) {
+        console.error(e);
+        const msg = e.message || '';
+        if (onAuthError && (msg.includes('403') || msg.includes('permission'))) {
+          onAuthError();
+        }
+        alert(`生成失败: ${msg}`);
+      } finally {
+        setIsGenerating(false);
+      }
+      return;
+    }
+    
+    // 以下是有图片的情况
     if (hasAnnotations) {
         finalPrompt += "I have provided two images:\n";
         finalPrompt += "1. A Source Image containing the scene to edit.\n";
@@ -589,6 +645,28 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // 优化prompt的函数
+  const handleEnhancePrompt = async () => {
+    if (!userPrompt.trim()) {
+      alert('请先输入调整意见后再优化');
+      return;
+    }
+    
+    setIsEnhancing(true);
+    try {
+      const enhancedText = await enhancePrompt(userPrompt, settings);
+      setUserPrompt(enhancedText);
+    } catch (err: any) {
+      const msg = err.message || '';
+      if (onAuthError && (msg.includes('403') || msg.includes('permission'))) {
+        onAuthError();
+      }
+      alert(`优化失败: ${msg}`);
+    } finally {
+      setIsEnhancing(false);
+    }
   };
 
   return (
@@ -872,6 +950,51 @@ const MoodBoard: React.FC<MoodBoardProps> = ({ settings, onAuthError, onUpdateSe
             {/* Zoom Indicator */}
             <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur px-3 py-1 rounded text-xs text-slate-400 select-none pointer-events-none">
                 {Math.round(viewport.scale * 100)}%
+            </div>
+            
+            {/* 调整意见输入区域 */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[600px] bg-dark-surface/95 backdrop-blur border border-dark-border rounded-lg shadow-2xl p-3">
+                <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-slate-400">调整意见</span>
+                            <button
+                                onClick={handleEnhancePrompt}
+                                disabled={isEnhancing || !userPrompt.trim()}
+                                className="p-1 rounded-md text-banana-400 hover:text-banana-300 hover:bg-dark-bg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                title="使用AI优化描述"
+                            >
+                                {isEnhancing ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                ) : (
+                                    <Sparkles className="w-3 h-3" />
+                                )}
+                            </button>
+                        </div>
+                        <textarea
+                            value={userPrompt}
+                            onChange={(e) => setUserPrompt(e.target.value)}
+                            placeholder="输入调整意见... 例如：让天空更蓝一些，增加暖色调，移除背景中的人物等"
+                            className="w-full bg-dark-bg/50 border border-dark-border rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-banana-500 resize-none transition-colors"
+                            rows={2}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onPointerMove={(e) => e.stopPropagation()}
+                            onPointerUp={(e) => e.stopPropagation()}
+                        />
+                    </div>
+                    {userPrompt.trim() && (
+                        <button
+                            onClick={() => setUserPrompt('')}
+                            className="p-2 text-slate-400 hover:text-white hover:bg-dark-bg rounded transition-colors shrink-0 mt-5"
+                            title="清空"
+                        >
+                            <Eraser className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
+                <div className="mt-2 text-xs text-slate-500">
+                    💡 提示：描述您想要的修改效果，AI会根据您的意见调整图片
+                </div>
             </div>
         </div>
 

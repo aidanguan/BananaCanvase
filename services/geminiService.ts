@@ -2,6 +2,86 @@ import { GoogleGenAI } from "@google/genai";
 import { MODEL_MAPPING } from "../constants";
 import { AppSettings, ModelId, ModelProvider } from "../types";
 
+// 优化用户描述的函数
+export const enhancePrompt = async (
+  userPrompt: string,
+  settings: AppSettings
+): Promise<string> => {
+  // Determine API Key and Base URL based on provider
+  let apiKey: string;
+  let baseUrl: string | undefined;
+
+  if (settings.provider === ModelProvider.AIHUBMIX) {
+    apiKey = (import.meta as any).env.VITE_AIHUBMIX_API_KEY || '';
+    baseUrl = (import.meta as any).env.VITE_AIHUBMIX_BASE_URL || 'https://aihubmix.com/gemini';
+  } else {
+    apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || '';
+    baseUrl = (import.meta as any).env.VITE_GEMINI_BASE_URL;
+  }
+
+  if (!apiKey) {
+    throw new Error(`API Key for ${settings.provider} is missing. Please configure it in .env file.`);
+  }
+
+  // Configure the client
+  const options: any = {
+    apiKey,
+    ...(baseUrl && { httpOptions: { baseUrl } })
+  };
+
+  const ai = new GoogleGenAI(options);
+  
+  // 使用文本模型 gemini-3-pro-preview (通过AIHubMix) 或 gemini-2.5-flash
+  let modelName: string;
+  if (settings.provider === ModelProvider.AIHUBMIX) {
+    modelName = 'gemini-3-pro-preview'; // AIHubMix的文本模型
+  } else {
+    modelName = 'gemini-2.5-flash'; // Google的文本模型
+  }
+
+  try {
+    const systemPrompt = `你是一个专业的AI图像生成提示词优化助手。用户会给你一段描述,你需要将其优化成更适合AI图像生成的提示词。
+
+优化规则:
+1. 保持用户原意,但让描述更加具体、生动、详细
+2. 添加合适的视觉细节(如光影、色彩、材质、构图等)
+3. 使用专业的摄影和艺术术语
+4. 保持简洁,避免冗长
+5. 使用与用户输入相同的语言输出(如果用户用中文描述就用中文优化,用英文描述就用英文优化)
+
+直接输出优化后的提示词,不要添加任何解释或额外内容。`;
+
+    const userMessage = `请优化这段描述:
+${userPrompt}`;
+
+    const contents = settings.provider === ModelProvider.AIHUBMIX
+      ? [{ role: 'user', parts: [{ text: systemPrompt + '\n\n' + userMessage }] }]
+      : { parts: [{ text: systemPrompt + '\n\n' + userMessage }] };
+
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: contents
+    });
+
+    if (response.candidates && response.candidates.length > 0) {
+      const candidate = response.candidates[0];
+      const contentParts = candidate.content.parts;
+
+      if (contentParts && contentParts[0] && contentParts[0].text) {
+        return contentParts[0].text.trim();
+      }
+    }
+
+    throw new Error("No text response generated.");
+  } catch (error: any) {
+    console.error("Prompt Enhancement Error:", error);
+    if (error.status === 403 || (error.message && error.message.includes('403'))) {
+      throw new Error("Permission Denied (403). Please select a valid API Key in Config.");
+    }
+    throw new Error(error.message || "Failed to enhance prompt.");
+  }
+};
+
 export const generateImageContent = async (
   prompt: string,
   settings: AppSettings,

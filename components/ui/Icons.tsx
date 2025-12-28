@@ -15,7 +15,9 @@ import {
   Eye,
   EyeOff,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Palette,
+  Sparkles
 } from 'lucide-react';
 
 export { 
@@ -34,5 +36,7 @@ export {
   Eye, 
   EyeOff,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Palette,
+  Sparkles
 };

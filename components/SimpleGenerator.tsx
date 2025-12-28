@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { ImageIcon, Wand2, RefreshCw } from './ui/Icons';
-import { generateImageContent } from '../services/geminiService';
+import { ImageIcon, Wand2, RefreshCw, Sparkles } from './ui/Icons';
+import { generateImageContent, enhancePrompt } from '../services/geminiService';
 import { AppSettings, ImageSize, AspectRatio, ReferenceImage } from '../types';
 import { ASPECT_RATIOS, getAvailableImageSizes, getMaxImageCount } from '../constants';
 
@@ -17,6 +17,7 @@ const SimpleGenerator: React.FC<SimpleGeneratorProps> = ({ settings, onAuthError
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isEnhancing, setIsEnhancing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 获取当前模型支持的分辨率选项
@@ -196,6 +197,29 @@ const SimpleGenerator: React.FC<SimpleGeneratorProps> = ({ settings, onAuthError
     }
   };
 
+  // 优化prompt的函数
+  const handleEnhancePrompt = async () => {
+    if (!prompt.trim()) {
+      setError('请先输入描述后再优化');
+      return;
+    }
+    
+    setIsEnhancing(true);
+    setError(null);
+    try {
+      const enhancedText = await enhancePrompt(prompt, settings);
+      setPrompt(enhancedText);
+    } catch (err: any) {
+      const msg = err.message || '';
+      if (onAuthError && (msg.includes('403') || msg.includes('permission'))) {
+        onAuthError();
+      }
+      setError(`优化失败: ${msg}`);
+    } finally {
+      setIsEnhancing(false);
+    }
+  };
+
   return (
     <div className="flex gap-4 p-6 max-w-[1920px] mx-auto h-full">
       {/* Input Section */}
@@ -206,7 +230,21 @@ const SimpleGenerator: React.FC<SimpleGeneratorProps> = ({ settings, onAuthError
         </h2>
 
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-2">描述</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-slate-400">描述</label>
+            <button
+              onClick={handleEnhancePrompt}
+              disabled={isEnhancing || !prompt.trim()}
+              className="p-1 rounded-md text-banana-400 hover:text-banana-300 hover:bg-dark-bg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title="使用AI优化描述"
+            >
+              {isEnhancing ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4" />
+              )}
+            </button>
+          </div>
           <textarea
             className="w-full h-32 bg-dark-bg border border-dark-border rounded-lg p-3 text-white focus:border-banana-500 focus:outline-none resize-none"
             placeholder="描述你想生成的图像..."
