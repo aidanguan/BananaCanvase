@@ -97,34 +97,13 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen bg-dark-bg text-slate-200 font-sans selection:bg-banana-500 selection:text-white flex flex-col overflow-hidden">
-      <SettingsBar settings={settings} onUpdate={updateSettings} />
+      <SettingsBar 
+        settings={settings} 
+        onUpdate={updateSettings} 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab}
+      />
       
-      {/* Navigation Tabs */}
-      <div className="flex justify-center border-b border-dark-border bg-dark-surface/50 backdrop-blur-sm z-10 shrink-0">
-        <button
-          onClick={() => setActiveTab('simple')}
-          className={`px-6 py-4 flex items-center gap-2 font-medium transition-colors border-b-2 ${
-            activeTab === 'simple' 
-              ? 'border-banana-500 text-banana-400' 
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <ImageIcon className="w-4 h-4" />
-          简易生成器
-        </button>
-        <button
-          onClick={() => setActiveTab('moodboard')}
-          className={`px-6 py-4 flex items-center gap-2 font-medium transition-colors border-b-2 ${
-            activeTab === 'moodboard' 
-              ? 'border-banana-500 text-banana-400' 
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          画板与编辑
-        </button>
-      </div>
-
       <main className="relative flex-1 overflow-hidden h-full">
         {activeTab === 'simple' ? (
           <SimpleGenerator settings={settings} onAuthError={handleAuthError} onUpdateSettings={updateSettings} />

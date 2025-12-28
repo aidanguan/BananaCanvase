@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { AppSettings, ModelId, ModelProvider } from '../types';
 import { MODELS, PROVIDERS } from '../constants';
-import { Settings, RefreshCw, Layers } from './ui/Icons';
+import { Settings, RefreshCw, Layers, ImageIcon } from './ui/Icons';
 
 interface SettingsBarProps {
   settings: AppSettings;
   onUpdate: (newSettings: Partial<AppSettings>) => void;
+  activeTab: 'simple' | 'moodboard';
+  onTabChange: (tab: 'simple' | 'moodboard') => void;
 }
 
-const SettingsBar: React.FC<SettingsBarProps> = ({ settings, onUpdate }) => {
+const SettingsBar: React.FC<SettingsBarProps> = ({ settings, onUpdate, activeTab, onTabChange }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Local state for the modal form
@@ -34,13 +36,39 @@ const SettingsBar: React.FC<SettingsBarProps> = ({ settings, onUpdate }) => {
 
   return (
     <>
-      <div className="w-full bg-dark-surface border-b border-dark-border p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-md z-10">
-        <div className="flex items-center gap-2 text-banana-400 font-bold text-xl">
+      <div className="w-full bg-dark-surface border-b border-dark-border px-4 py-3 flex flex-col md:flex-row items-center justify-between gap-4 shadow-md z-10 shrink-0">
+        <div className="flex items-center gap-2 text-banana-400 font-bold text-xl min-w-[200px]">
           <Settings className="w-6 h-6" />
-          <span>Banana Canvas AI</span>
+          <span>香蕉画布</span>
         </div>
 
-        <div className="flex items-center gap-4 w-full md:w-auto">
+        {/* Navigation Tabs - Centered */}
+        <div className="flex items-center gap-1 bg-dark-bg/50 p-1 rounded-lg border border-dark-border">
+            <button
+              onClick={() => onTabChange('simple')}
+              className={`px-4 py-1.5 flex items-center gap-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'simple' 
+                  ? 'bg-banana-500 text-white shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              <ImageIcon className="w-4 h-4" />
+              简易生成器
+            </button>
+            <button
+              onClick={() => onTabChange('moodboard')}
+              className={`px-4 py-1.5 flex items-center gap-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'moodboard' 
+                  ? 'bg-banana-500 text-white shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              画板与编辑
+            </button>
+        </div>
+
+        <div className="flex items-center gap-4 w-full md:w-auto justify-end min-w-[200px]">
           {/* Quick Model Selector */}
           <div className="flex flex-col gap-1">
             <label className="text-xs text-slate-400 font-medium ml-1">模型</label>
